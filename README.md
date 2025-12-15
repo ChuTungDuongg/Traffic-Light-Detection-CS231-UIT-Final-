@@ -197,5 +197,3 @@ Vietnam National University – HCMC
 🚦 *Happy training & happy detecting!*
 
 
-Chỉ cần nói 👍
-
