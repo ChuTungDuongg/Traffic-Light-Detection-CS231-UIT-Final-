@@ -1,199 +1,96 @@
-# 🚦 Traffic Light Detection
+# 🚦 Traffic Light Detection (CS231 – UIT)
 
-**CS231 – Introduction to Computer Vision (UIT)**
+Final project for **CS231 – Introduction to Computer Vision (University of Information Technology, VNU-HCM)**. The repository implements a **classical computer vision pipeline** for traffic light detection and color classification using HSV heuristics for localization and HOG/VGG16 features for classification.
 
-> 🎓 **Final Project – CS231**
-> 👨‍💻 Classical Computer Vision + Machine Learning
-> 📍 University of Information Technology (UIT)
+## 🗺️ What’s inside
+- **Complete pipelines in notebooks**: full training/evaluation (`lisa_full_pipeline_clean.ipynb`) and ablation experiments (`Ablation_study.ipynb`).
+- **Reusable dataset utilities**: `dataset_lisa.py` for loading LISA annotations and building patch datasets.
+- **Feature extraction**: `features_hog.py` contains HOG helpers; VGG16 (frozen) extraction lives in the notebook.
+- **Interactive demo**: `app_gradio.py` serves a Gradio UI powered by the trained SVM + HOG model stored in `outputs/`.
+- **Demo assets**: `demo/` (sample images) and `demo_assets/` (patches/backgrounds for presentations).
+- **Helpers**: `scripts/make_demo_patches.py` to export balanced patches from the raw dataset.
 
----
-
-## 📌 Overview
-
-This project focuses on **traffic light detection and classification** using a **hybrid classical computer vision pipeline**.
-The system combines:
-
-* **Heuristic color-based localization** (HSV, S×V peak)
-* **Feature extraction** (HOG & VGG16 pretrained – frozen)
-* **Classical classifiers** (SVM, SGDClassifier)
-
-The goal is to build a **robust, interpretable, and practical pipeline** that works well even with **small objects and limited training data**, as commonly encountered in real-world traffic scenes.
-
----
-
-## 🧠 Key Contributions
-
-✔ Stable **Conditioned Sliding Window** based on HSV (S×V peak)
-✔ Comparison between **Handcrafted features (HOG)** and **Deep features (VGG16 freeze)**
-✔ End-to-end **training – evaluation – demo pipeline**
-✔ Clear analysis using **confusion matrix, learning curves, epoch curves**
-✔ Fully reproducible experimental setup
-
----
-
-## 📂 Project Structure
-
+## 📂 Repository layout
 ```
-Traffic-Light-Detection-CS231-UIT-Final/
-│
-├── LISA_Trafficlight_clean_pipeline.ipynb   # Main training & evaluation pipeline
-├── dataset_lisa.py                          # Dataset loader from LISA annotations
-├── features_hog.py                          # HOG feature extraction (batch)
-│
-├── outputs/
-│   ├── svm_hog.joblib                       # Trained HOG + SVM model
-│   └── svm_vgg16.joblib                     # Trained VGG16(freeze) + SVM model
-│
-├── demo/
-│   ├── *.jpg / *.png / *.webp               # Images for demo testing
-│
-└── README.md
+Traffic-Light-Detection-CS231-UIT-Final-
+├── lisa_full_pipeline_clean.ipynb   # Main notebook: dataset -> features -> training -> evaluation
+├── Ablation_study.ipynb             # Experiments comparing HOG vs VGG16 (frozen) + SVM/SGD
+├── dataset_lisa.py                  # Parse LISA annotations, crop patches, map labels
+├── features_hog.py                  # HOG feature helpers used by notebooks and demo
+├── detector_tf1.py                  # Optional TF1 detector wrapper (best-effort import in the app)
+├── app_gradio.py                    # Gradio demo consuming trained model/config from outputs/
+├── scripts/
+│   └── make_demo_patches.py         # Export small, balanced patch set for demos
+├── outputs/                         # Place for trained models (svm_hog.joblib, hog_config.json, ...)
+├── demo/                            # Sample images for quick testing
+└── demo_assets/                     # Additional demo-ready assets (patches, backgrounds)
 ```
 
----
+## 🛠️ Environment
+- Python ≥ 3.9 recommended.
+- Core dependencies: `numpy`, `pandas`, `opencv-python`, `matplotlib`, `scikit-learn`, `tensorflow` (for VGG16 feature extraction), `scikit-image`, `joblib`, `gradio` (for the UI).
 
-## 📊 Dataset
-
-This project uses the **LISA Traffic Light Dataset**, available on Kaggle:
-
-🔗 [https://www.kaggle.com/datasets/mbornoe/lisa-traffic-light-dataset](https://www.kaggle.com/datasets/mbornoe/lisa-traffic-light-dataset)
-
-* Images with bounding-box annotations
-* Traffic light colors: **Red / Yellow / Green**
-* Outdoor scenes with varying lighting conditions
-
----
-
-## ⚙️ Methodology
-
-### 1️⃣ Patch-based Dataset Construction
-
-* Crop image patches from bounding-box annotations
-* Normalize patch size to **64×64**
-* Convert detection problem → classification problem
-
-### 2️⃣ Feature Extraction
-
-* **HOG (Histogram of Oriented Gradients)**
-
-  * Cell: 4×4, Block: 2×2
-  * Optimized for small objects (traffic lights)
-* **VGG16 (Frozen, ImageNet pretrained)**
-
-  * Deep feature extractor
-  * No fine-tuning to avoid overfitting
-
-### 3️⃣ Classification
-
-* **Support Vector Machine (RBF kernel)**
-* **SGDClassifier (log loss)** for epoch-based analysis
-
-### 4️⃣ Evaluation
-
-* Accuracy
-* Precision / Recall / F1-score
-* Confusion Matrix
-* Learning Curves (Train vs Validation)
-* Epoch-based Accuracy/Loss Curves (SGD)
-
----
-
-## 🎥 Final Demo – Stable Detection Pipeline
-
-A practical demo is implemented using:
-
-**Conditioned Sliding Window via HSV S×V Peak**
-
-* No hard thresholds
-* No contour or circularity dependency
-* Robust against illumination changes
-* Always proposes a candidate region if strong color evidence exists
-
-This makes the demo **stable and reliable for real-world testing**.
-
----
-
-## 🚀 How to Run
-
-### 1️⃣ Install Dependencies
-
+Install everything in a virtual environment:
 ```bash
-pip install numpy opencv-python matplotlib scikit-learn tensorflow scikit-image joblib
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+pip install --upgrade pip
+pip install numpy pandas opencv-python matplotlib scikit-learn tensorflow scikit-image joblib gradio
 ```
 
-### 2️⃣ Download Dataset
+## 📊 Dataset: LISA Traffic Light
+Download the LISA Traffic Light Dataset from Kaggle:
+- https://www.kaggle.com/datasets/mbornoe/lisa-traffic-light-dataset
 
-Download and extract the dataset from Kaggle:
+After extracting, note the dataset root (folder containing `Annotations/` and video folders). The utilities assume the original folder structure.
 
-```
-https://www.kaggle.com/datasets/mbornoe/lisa-traffic-light-dataset
-```
-
-Update the dataset path in the notebook:
-
+### Build a patch dataset
+Use `dataset_lisa.py` to crop 64×64 patches from bounding boxes (and optional background patches):
 ```python
-DATASET_ROOT = "path/to/lisa_dataset"
+from dataset_lisa import build_patch_dataset_from_box_csvs
+
+X, y = build_patch_dataset_from_box_csvs(
+    dataset_root="/path/to/lisa-traffic-light-dataset",  # folder that contains Annotations/
+    max_samples=5000,
+    add_other=True,            # add background negatives
+    n_other_per_image=1,       # negatives per annotated frame
+    other_max_iou=0.02,        # avoid overlap with ground-truth boxes
+)
 ```
+The function returns NumPy arrays `X` (patches) and `y` (labels mapped to {0: other, 1: green, 2: red, 3: yellow}).
 
-### 3️⃣ Train & Evaluate
+## 🧠 Training & evaluation
+1. Launch Jupyter and open the main notebook:
+   ```bash
+   jupyter notebook lisa_full_pipeline_clean.ipynb
+   ```
+2. Update the dataset path variables in the first cells.
+3. Run all cells to generate train/validation splits, extract features (HOG or VGG16), train SVM/SGD models, and log metrics/plots.
+4. The notebook saves trained artifacts to `outputs/` (e.g., `svm_hog.joblib` and `hog_config.json`).
 
-Open and run:
+For additional comparisons, open `Ablation_study.ipynb` and execute selected cells to reproduce the feature/classifier ablations.
 
+## 🎛️ Gradio demo
+Run the interactive patch/classification demo once a trained model exists in `outputs/`:
+```bash
+python app_gradio.py
 ```
-LISA_Trafficlight_clean_pipeline.ipynb
-```
+- The app loads `outputs/svm_hog.joblib` and `outputs/hog_config.json` by default (edit the constants at the top of `app_gradio.py` to point to custom files).
+- If TensorFlow 1.x support is unavailable, the app still runs; the TF1 detector is optional and guarded by a safe import.
+- Upload an image or patch through the UI to view predicted color and class probabilities.
 
-### 4️⃣ Run Demo
+## 🧰 Utilities
+- **Patch export for slides/demos**: edit `DATASET_ROOT` and `OUT_DIR` in `scripts/make_demo_patches.py`, then run:
+  ```bash
+  python scripts/make_demo_patches.py
+  ```
+  The script creates balanced folders (`green/`, `red/`, `yellow/`, `other/`) inside `OUT_DIR`.
+- **Sample images**: use files in `demo/` to quickly test the demo app.
 
-Use images in the `demo/` folder or add your own traffic images.
-
----
-
-## 🧪 Experimental Highlights
-
-* **HOG + SVM** performs strongly on small, well-defined objects
-* **VGG16(freeze) + SVM** provides competitive performance with better generalization
-* Learning curves reveal data-limited behavior
-* Epoch curves illustrate convergence dynamics (via SGD)
-
----
-
-## ⚠️ Limitations
-
-* Heuristic detection may fail on:
-
-  * Traffic lights heavily occluded
-  * Bright LED billboards or vehicle lights
-* No temporal modeling (single-frame only)
-* No end-to-end deep detection (e.g., YOLO)
+## 🚦 Notes & tips
+- HOG is tuned for small objects; if you change `PATCH_SIZE` or `HOG_CONFIG_PATH`, retrain and save both the model and config.
+- Negative sampling (`add_other`) improves robustness to non-traffic-light regions.
+- Keep the original LISA directory layout; the loaders infer image paths relative to `Annotations/Annotations/*/frameAnnotationsBOX.csv`.
 
 ---
-
-## 🔮 Future Work
-
-* Integrate CNN-based detector (YOLO / SSD)
-* Temporal smoothing for video input
-* Fine-tune deep backbone on traffic-light-specific data
-* Deploy lightweight version for embedded systems
-
----
-
-## 👤 Author
-
-**CS231 – Final Project**
-University of Information Technology (UIT)
-Vietnam National University – HCMC
-
----
-
-## ⭐ Acknowledgements
-
-* CS231 Teaching Team – UIT
-* LISA Traffic Light Dataset authors
-* Open-source Computer Vision community
-
----
-
-🚦 *Happy training & happy detecting!*
-
-
+**Happy training & detecting!**
