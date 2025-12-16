@@ -8,10 +8,12 @@ from skimage.feature import hog
 # ====== EDIT THESE ======
 MODEL_PATH = "outputs/svm_hog.joblib"
 HOG_CONFIG_PATH = "outputs/hog_config.json"
+
+# Kích thước patch sau khi chuẩn hóa (letterbox + resize về vuông)
 PATCH_SIZE = 64
 
-# Ngưỡng reject: nếu model không tự tin -> trả OTHER
-REJECT_THRESHOLD = 0.55
+# Ngưỡng reject mặc định: nếu model không tự tin -> trả OTHER
+DEFAULT_REJECT_THRESHOLD = 0.55
 # =======================
 
 
@@ -61,9 +63,38 @@ def get_class_names_from_model(model):
 CLASS_NAMES, MODEL_CLASSES = get_class_names_from_model(clf)
 
 
-def preprocess_patch(img_bgr):
-    img = cv2.resize(img_bgr, (PATCH_SIZE, PATCH_SIZE), interpolation=cv2.INTER_AREA)
+def _letterbox_resize(img_bgr, dst_size):
+    """Resize giữ tỉ lệ, padding letterbox để ra ảnh vuông dst_size×dst_size."""
+    h, w = img_bgr.shape[:2]
+    scale = dst_size / max(h, w)
+    new_w, new_h = int(round(w * scale)), int(round(h * scale))
+    resized = cv2.resize(img_bgr, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+    pad_top = (dst_size - new_h) // 2
+    pad_bottom = dst_size - new_h - pad_top
+    pad_left = (dst_size - new_w) // 2
+    pad_right = dst_size - new_w - pad_left
+
+    return cv2.copyMakeBorder(
+        resized,
+        pad_top,
+        pad_bottom,
+        pad_left,
+        pad_right,
+        borderType=cv2.BORDER_CONSTANT,
+        value=[0, 0, 0],
+    )
+
+
+def preprocess_patch(img_bgr, apply_clahe=False):
+    # Resize giữ tỉ lệ và padding để không méo hình
+    img = _letterbox_resize(img_bgr, PATCH_SIZE)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    if apply_clahe:
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        gray = clahe.apply(gray)
+
     return img, gray
 
 
@@ -85,13 +116,13 @@ def _softmax(scores_1d: np.ndarray) -> np.ndarray:
     return exps / (np.sum(exps) + 1e-9)
 
 
-def predict(img):
+def predict(img, reject_threshold=DEFAULT_REJECT_THRESHOLD, apply_clahe=False):
     if img is None:
         return "No image", {}
 
     # gradio trả RGB -> BGR
     img_bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-    _, gray = preprocess_patch(img_bgr)
+    _, gray = preprocess_patch(img_bgr, apply_clahe=apply_clahe)
     x = extract_hog(gray).reshape(1, -1)
 
     # 1) Lấy proba nếu có
@@ -113,7 +144,7 @@ def predict(img):
     pred_label = CLASS_NAMES[pred_idx]
 
     # Reject: nếu không đủ tự tin thì trả other (dù model không train other)
-    if conf < REJECT_THRESHOLD:
+    if conf < reject_threshold:
         pred_label = "other"
 
     # Build dict probabilities đúng số lớp
@@ -127,21 +158,39 @@ def predict(img):
 
 demo = gr.Interface(
     fn=predict,
-    inputs=gr.Image(type="numpy", label="Upload a patch (any size; it will be resized to 64×64)"),
+    inputs=[
+        gr.Image(
+            type="numpy",
+            label="Upload a patch (any aspect ratio; sẽ letterbox về 64×64)",
+        ),
+        gr.Slider(
+            minimum=0.0,
+            maximum=1.0,
+            step=0.01,
+            value=DEFAULT_REJECT_THRESHOLD,
+            label="Reject threshold (confidence < threshold → other)",
+        ),
+        gr.Checkbox(
+            value=False,
+            label="Apply CLAHE (normalize brightness for low-light/glare)",
+        ),
+    ],
     outputs=[
         gr.Textbox(label="Result"),
         gr.Label(label="Probabilities")
     ],
     title="Traffic Light Patch Classifier (HOG + Classifier)",
     description=(
-        "Demo đúng bài toán classification trên patch. "
-        "Nếu confidence thấp hơn ngưỡng, hệ thống trả OTHER (reject)."
+        "Demo classification trên patch. Ảnh sẽ được letterbox để giữ tỉ lệ, "
+        "có tùy chọn chuẩn hóa sáng (CLAHE) và chỉnh ngưỡng reject để thử nghiệm"
     ),
     examples=[
-        ["demo_assets/patches/red/red_0000.jpg"],
-        ["demo_assets/patches/green/green_0000.jpg"],
-        ["demo_assets/patches/yellow/yellow_0000.jpg"],
-        ["demo_assets/patches/other/other_0000.jpg"],
+        ["demo_assets/patches/red/red_0000.jpg", DEFAULT_REJECT_THRESHOLD, False],
+        ["demo_assets/patches/green/green_0000.jpg", DEFAULT_REJECT_THRESHOLD, False],
+        ["demo_assets/patches/yellow/yellow_0000.jpg", DEFAULT_REJECT_THRESHOLD, False],
+        ["demo_assets/patches/other/other_0000.jpg", DEFAULT_REJECT_THRESHOLD, False],
+        ["demo/Modern_British_LED_Traffic_Light.jpg", DEFAULT_REJECT_THRESHOLD, True],
+        ["demo/z7324240384988_c909efa49a8f0b3eefdd79dec70a68b6.jpg", 0.35, True],
     ]
 )
 
