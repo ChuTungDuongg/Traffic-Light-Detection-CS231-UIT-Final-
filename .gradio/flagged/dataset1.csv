@@ -1,0 +1,2 @@
+Upload a patch (any size; it will be resized to 64×64),Result,Probabilities,timestamp
+,"Prediction: GREEN | confidence=0.989 | model_classes=['green', 'red', 'yellow']","{""label"": ""green"", ""confidences"": [{""label"": ""green"", ""confidence"": 0.9885525600663044}, {""label"": ""red"", ""confidence"": 0.010705371472863903}, {""label"": ""yellow"", ""confidence"": 0.0007420684608316037}]}",2025-12-16 18:04:28.597002
