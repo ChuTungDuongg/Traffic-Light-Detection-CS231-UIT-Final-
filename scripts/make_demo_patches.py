@@ -27,7 +27,7 @@ OUT_DIR = r"demo_assets/patches"
 PATCH_SIZE = 64
 
 # Mỗi lớp (green/red/yellow) lấy bao nhiêu patch đèn để demo
-N_PER_CLASS = 30
+N_PER_CLASS = 100
 
 # Số patch "other/background" để demo reject
 N_OTHER = 60
