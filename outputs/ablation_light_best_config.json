@@ -1,0 +1,81 @@
+{
+  "best_hog_params": {
+    "cell": 8,
+    "block": 2,
+    "ori": 6,
+    "dim": 1176,
+    "acc_mean": 0.9923125,
+    "acc_std": 0.001259340104975613,
+    "f1_mean": 0.9919254233475063,
+    "f1_std": 0.0017240107660160175
+  },
+  "fixed_rbf_for_hog_ablation": {
+    "C": 1.0,
+    "gamma": "scale",
+    "class_weight": null
+  },
+  "best_clf_hog": {
+    "feat": "HOG(best)",
+    "clf": "RBFSVM",
+    "C": 2.0,
+    "gamma": "scale",
+    "lr": null,
+    "acc_mean": 0.9931249999999998,
+    "acc_std": 0.001218349293101106,
+    "f1_mean": 0.9925703453261712,
+    "f1_std": 0.001656161579539878
+  },
+  "best_clf_vgg": {
+    "feat": "VGG16(freeze)",
+    "clf": "RBFSVM",
+    "C": 2.0,
+    "gamma": "scale",
+    "lr": null,
+    "acc_mean": 0.9936875000000001,
+    "acc_std": 0.0017940875118009204,
+    "f1_mean": 0.9903550822605303,
+    "f1_std": 0.0023461752866696683
+  },
+  "best_overall_cv": {
+    "feat": "HOG(best)",
+    "clf": "RBFSVM",
+    "C": 2.0,
+    "gamma": "scale",
+    "lr": null,
+    "acc_mean": 0.9931249999999998,
+    "acc_std": 0.001218349293101106,
+    "f1_mean": 0.9925703453261712,
+    "f1_std": 0.001656161579539878
+  },
+  "final_test": {
+    "acc": 0.99625,
+    "macro_f1": 0.9950185378646712,
+    "cm": [
+      [
+        1932,
+        1,
+        1,
+        0
+      ],
+      [
+        6,
+        1167,
+        1,
+        0
+      ],
+      [
+        5,
+        0,
+        829,
+        0
+      ],
+      [
+        1,
+        0,
+        0,
+        57
+      ]
+    ]
+  },
+  "note": "HOG ablation uses fixed RBF-SVM; classifier selection uses tiny grids; TEST used once at end."
+}
