@@ -3,10 +3,10 @@
 Final project for **CS231 – Introduction to Computer Vision (University of Information Technology, VNU-HCM)**. The repository implements a **classical computer vision pipeline** for traffic light detection and color classification using HSV heuristics for localization and HOG/VGG16 features for classification.
 
 ## 🗺️ What’s inside
-- **Complete pipelines in notebooks**: full training/evaluation (`lisa_full_pipeline_clean.ipynb`) and ablation experiments (`Ablation_study.ipynb`).
+- **Complete pipelines in notebooks**: full training/evaluation (`lisa_full_pipeline_clean.ipynb`) and ablation experiments (`ablation_study_light.ipynb`).
 - **Reusable dataset utilities**: `dataset_lisa.py` for loading LISA annotations and building patch datasets.
 - **Feature extraction**: `features_hog.py` contains HOG helpers; VGG16 (frozen) extraction lives in the notebook.
-- **Interactive demo**: `app_gradio.py` serves a Gradio UI powered by the trained SVM + HOG model stored in `outputs/`.
+- **Interactive demo**: `app_gradio.py` serves a Gradio UI powered by the trained SVM + HOG model stored in `outputs/`. A compact variant (`app_gradio_B.py`) loads the same artifacts but uses a lighter UI layout.
 - **Demo assets**: `demo/` (sample images) and `demo_assets/` (patches/backgrounds for presentations).
 - **Helpers**: `scripts/make_demo_patches.py` to export balanced patches from the raw dataset.
 
@@ -14,7 +14,7 @@ Final project for **CS231 – Introduction to Computer Vision (University of Inf
 ```
 Traffic-Light-Detection-CS231-UIT-Final-
 ├── lisa_full_pipeline_clean.ipynb   # Main notebook: dataset -> features -> training -> evaluation
-├── Ablation_study.ipynb             # Experiments comparing HOG vs VGG16 (frozen) + SVM/SGD
+├── ablation_study_light.ipynb       # Experiments comparing HOG vs VGG16 (frozen) + SVM/SGD
 ├── dataset_lisa.py                  # Parse LISA annotations, crop patches, map labels
 ├── features_hog.py                  # HOG feature helpers used by notebooks and demo
 ├── detector_tf1.py                  # Optional TF1 detector wrapper (best-effort import in the app)
@@ -30,13 +30,17 @@ Traffic-Light-Detection-CS231-UIT-Final-
 - Python ≥ 3.9 recommended.
 - Core dependencies: `numpy`, `pandas`, `opencv-python`, `matplotlib`, `scikit-learn`, `tensorflow` (for VGG16 feature extraction), `scikit-image`, `joblib`, `gradio` (for the UI).
 
-Install everything in a virtual environment:
+Quick start in a fresh virtual environment:
 ```bash
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install --upgrade pip
 pip install numpy pandas opencv-python matplotlib scikit-learn tensorflow scikit-image joblib gradio
 ```
+
+> Tip: If you only need the HOG + SVM demo, you can omit `tensorflow` to speed up installation.
+
+Activate your environment in future shells with `source .venv/bin/activate` (or the Windows equivalent).
 
 ## 📊 Dataset: LISA Traffic Light
 Download the LISA Traffic Light Dataset from Kaggle:
@@ -59,6 +63,12 @@ X, y = build_patch_dataset_from_box_csvs(
 ```
 The function returns NumPy arrays `X` (patches) and `y` (labels mapped to {0: other, 1: green, 2: red, 3: yellow}).
 
+You can persist the patches for reuse with `numpy.savez_compressed`:
+```python
+import numpy as np
+np.savez_compressed("lisa_patches.npz", X=X, y=y)
+```
+
 ## 🧠 Training & evaluation
 1. Launch Jupyter and open the main notebook:
    ```bash
@@ -68,7 +78,9 @@ The function returns NumPy arrays `X` (patches) and `y` (labels mapped to {0: ot
 3. Run all cells to generate train/validation splits, extract features (HOG or VGG16), train SVM/SGD models, and log metrics/plots.
 4. The notebook saves trained artifacts to `outputs/` (e.g., `svm_hog.joblib` and `hog_config.json`).
 
-For additional comparisons, open `Ablation_study.ipynb` and execute selected cells to reproduce the feature/classifier ablations.
+For a purely scriptable path (no notebook), you can reuse the feature and training helpers inside `features_hog.py` and `dataset_lisa.py` to assemble your own pipeline.
+
+For additional comparisons, open `ablation_study_light.ipynb` and execute selected cells to reproduce the feature/classifier ablations.
 
 ## 🎛️ Gradio demo
 Run the interactive patch/classification demo once a trained model exists in `outputs/`:
@@ -78,6 +90,11 @@ python app_gradio.py
 - The app loads `outputs/svm_hog.joblib` and `outputs/hog_config.json` by default (edit the constants at the top of `app_gradio.py` to point to custom files).
 - If TensorFlow 1.x support is unavailable, the app still runs; the TF1 detector is optional and guarded by a safe import.
 - Upload an image or patch through the UI to view predicted color and class probabilities.
+
+`app_gradio_B.py` exposes the same functionality with a simplified layout and can be launched the same way:
+```bash
+python app_gradio_B.py
+```
 
 ## 🧰 Utilities
 - **Patch export for slides/demos**: edit `DATASET_ROOT` and `OUT_DIR` in `scripts/make_demo_patches.py`, then run:
