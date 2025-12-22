@@ -42,6 +42,12 @@ pip install numpy pandas opencv-python matplotlib scikit-learn tensorflow scikit
 
 Activate your environment in future shells with `source .venv/bin/activate` (or the Windows equivalent).
 
+### Quickstart workflow
+1. **Use the included artifacts:** pre-trained HOG + SVM models and configs live in `outputs/` (e.g., `svm_hog.joblib`, `svm_best_hog.joblib`, `ablation_light_best_model.joblib`, and matching JSON configs). You can immediately load these files in the Gradio app without retraining.
+2. **Train your own model (optional):** follow the steps in **Training & evaluation** to regenerate artifacts tailored to your dataset slice or hyperparameters.
+3. **Launch the demo:** run `python app_gradio.py` (or `python app_gradio_B.py`) and upload an image/patch to view predictions. The app auto-loads `outputs/svm_hog.joblib` and `outputs/hog_config.json` by default; adjust the constants at the top of the script to point to alternative artifacts.
+4. **Swap detectors:** if you have TensorFlow 1.x installed and a compatible frozen detector in `outputs/tf1_detector/`, the optional detector wrapper (`detector_tf1.py`) will be used automatically; otherwise it is safely skipped.
+
 ## 📊 Dataset: LISA Traffic Light
 Download the LISA Traffic Light Dataset from Kaggle:
 - https://www.kaggle.com/datasets/mbornoe/lisa-traffic-light-dataset
