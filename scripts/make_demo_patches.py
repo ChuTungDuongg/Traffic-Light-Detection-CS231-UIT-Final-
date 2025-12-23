@@ -4,11 +4,11 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+from sklearn.model_selection import train_test_split
+
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-
-# Import đúng các hàm bạn đã dùng để build dataset
 from dataset_lisa import (
     find_box_csv_files,
     load_annotations,
@@ -19,26 +19,18 @@ from dataset_lisa import (
     map_label_to_4,
 )
 
-# =======================
-# CONFIG (bạn sửa 3 dòng)
-# =======================
 DATASET_ROOT = r"C:\Users\PC\.cache\kagglehub\datasets\mbornoe\lisa-traffic-light-dataset\versions\2"
-OUT_DIR = r"demo_assets/patches"
+OUT_DIR = r"demo_assets/patches_test_only"
 PATCH_SIZE = 64
 
-# Mỗi lớp (green/red/yellow) lấy bao nhiêu patch đèn để demo
-N_PER_CLASS = 100
-
-# Số patch "other/background" để demo reject
-N_OTHER = 60
-
 RANDOM_SEED = 42
-MAX_TRIALS_PER_OTHER = 300  # tăng nếu dataset khó lấy negative
-IOU_MAX = 0.05              # patch other không được overlap bbox đèn quá mức này
-# =======================
+TEST_SIZE = 0.2
 
-random.seed(RANDOM_SEED)
-np.random.seed(RANDOM_SEED)
+N_PER_CLASS = 200
+N_OTHER = 100
+
+IOU_MAX = 0.05
+MAX_TRIALS_PER_OTHER = 3000
 
 CLASS_ID2NAME = {0: "other", 1: "green", 2: "red", 3: "yellow"}
 
@@ -69,7 +61,6 @@ def iou_xyxy(a, b):
 
 
 def pick_cols(df):
-    """Copy y hệt logic pick_col trong dataset_lisa.py nhưng trả về tên cột gốc."""
     cols = [c.lower() for c in df.columns]
 
     def pick_col(cands):
@@ -79,31 +70,64 @@ def pick_cols(df):
         return None
 
     col_fname = pick_col(["filename", "file", "image", "frame"])
-    col_xmin  = pick_col(["xmin", "x1", "x_min", "upper left corner x"])
-    col_ymin  = pick_col(["ymin", "y1", "y_min", "upper left corner y"])
-    col_xmax  = pick_col(["xmax", "x2", "x_max", "lower right corner x"])
-    col_ymax  = pick_col(["ymax", "y2", "y_max", "lower right corner y"])
+    col_xmin = pick_col(["xmin", "x1", "x_min", "upper left corner x"])
+    col_ymin = pick_col(["ymin", "y1", "y_min", "upper left corner y"])
+    col_xmax = pick_col(["xmax", "x2", "x_max", "lower right corner x"])
+    col_ymax = pick_col(["ymax", "y2", "y_max", "lower right corner y"])
     col_label = pick_col(["annotation", "label", "state", "type", "trafficlight", "annotation tag"])
-
     return col_fname, col_xmin, col_ymin, col_xmax, col_ymax, col_label
 
 
 def save_rgb_patch_as_jpg(patch_rgb: np.ndarray, out_path: str):
-    # patch_rgb -> BGR để cv2.imwrite
     patch_bgr = cv2.cvtColor(patch_rgb, cv2.COLOR_RGB2BGR)
     cv2.imwrite(out_path, patch_bgr)
 
 
-def main():
-    ensure_dirs(OUT_DIR)
-
+def build_test_image_set():
     csv_files = find_box_csv_files(DATASET_ROOT)
     if not csv_files:
         raise RuntimeError("Không tìm thấy frameAnnotationsBOX.csv. Kiểm tra DATASET_ROOT.")
 
-    # 1) Thu thập patches đèn theo bbox để đủ green/red/yellow
+    img_set = set()
+
+    for csv_path in csv_files:
+        df = load_annotations(csv_path)
+        col_fname, col_xmin, col_ymin, col_xmax, col_ymax, col_label = pick_cols(df)
+        if not all([col_fname, col_xmin, col_ymin, col_xmax, col_ymax, col_label]):
+            continue
+
+        image_base_dir = infer_image_base_dir(csv_path)
+        for _, row in df.iterrows():
+            y = map_label_to_4(row[col_label])
+            if y not in (1, 2, 3):
+                continue
+            img_path = resolve_image_path(image_base_dir, row[col_fname])
+            if img_path is None or (not os.path.exists(img_path)):
+                continue
+            img_set.add(img_path)
+
+    img_list = sorted(list(img_set))
+    train_imgs, test_imgs = train_test_split(
+        img_list,
+        test_size=TEST_SIZE,
+        random_state=RANDOM_SEED,
+        shuffle=True
+    )
+    return set(test_imgs)
+
+
+def main():
+    random.seed(RANDOM_SEED)
+    np.random.seed(RANDOM_SEED)
+
+    ensure_dirs(OUT_DIR)
+    test_imgs = build_test_image_set()
+
+    csv_files = find_box_csv_files(DATASET_ROOT)
     counts = {"green": 0, "red": 0, "yellow": 0}
-    picked_records = []  # lưu (img_path, bbox_xyxy) để lát lấy OTHER từ chính các ảnh này
+
+    bbox_by_img = {}
+    picked_test_imgs = []
 
     for csv_path in csv_files:
         df = load_annotations(csv_path)
@@ -114,16 +138,10 @@ def main():
         image_base_dir = infer_image_base_dir(csv_path)
 
         for _, row in df.iterrows():
-            y = map_label_to_4(row[col_label])
-            if y not in (1, 2, 3):  # chỉ lấy 3 màu
-                continue
-
-            lab = CLASS_ID2NAME[y]
-            if counts[lab] >= N_PER_CLASS:
-                continue
-
             img_path = resolve_image_path(image_base_dir, row[col_fname])
             if img_path is None or (not os.path.exists(img_path)):
+                continue
+            if img_path not in test_imgs:
                 continue
 
             try:
@@ -134,6 +152,18 @@ def main():
             H, W, _ = img_rgb.shape
             x1, y1, x2, y2 = clamp_xyxy(row[col_xmin], row[col_ymin], row[col_xmax], row[col_ymax], W, H)
 
+            if img_path not in bbox_by_img:
+                bbox_by_img[img_path] = []
+            bbox_by_img[img_path].append((x1, y1, x2, y2))
+
+            y = map_label_to_4(row[col_label])
+            if y not in (1, 2, 3):
+                continue
+
+            lab = CLASS_ID2NAME[y]
+            if counts[lab] >= N_PER_CLASS:
+                continue
+
             patch = crop_patch(img_rgb, x1, y1, x2, y2, out_size=(PATCH_SIZE, PATCH_SIZE))
             if patch is None:
                 continue
@@ -142,26 +172,22 @@ def main():
             save_rgb_patch_as_jpg(patch, out_path)
 
             counts[lab] += 1
-            picked_records.append((img_path, (x1, y1, x2, y2)))
+            picked_test_imgs.append(img_path)
 
             if all(counts[c] >= N_PER_CLASS for c in counts):
                 break
+
         if all(counts[c] >= N_PER_CLASS for c in counts):
             break
 
-    print("Saved traffic-light patches:", counts)
+    print("Saved TEST traffic-light patches:", counts)
 
-    # 2) Tạo OTHER patches: random crop 64x64 không overlap bbox đèn (từ các ảnh đã pick)
+    picked_test_imgs = list(dict.fromkeys(picked_test_imgs))
     other_saved = 0
-    if not picked_records:
-        print("WARNING: Không pick được ảnh/bbox nào để tạo OTHER.")
-        return
-
     trials = 0
     while other_saved < N_OTHER and trials < N_OTHER * MAX_TRIALS_PER_OTHER:
         trials += 1
-        img_path, bbox = random.choice(picked_records)
-
+        img_path = random.choice(picked_test_imgs)
         bgr = cv2.imread(img_path)
         if bgr is None:
             continue
@@ -174,7 +200,12 @@ def main():
         rx2 = rx1 + PATCH_SIZE
         ry2 = ry1 + PATCH_SIZE
 
-        if iou_xyxy((rx1, ry1, rx2, ry2), bbox) > IOU_MAX:
+        ok = True
+        for bb in bbox_by_img.get(img_path, []):
+            if iou_xyxy((rx1, ry1, rx2, ry2), bb) > IOU_MAX:
+                ok = False
+                break
+        if not ok:
             continue
 
         patch_bgr = bgr[ry1:ry2, rx1:rx2]
@@ -182,12 +213,7 @@ def main():
         cv2.imwrite(out_path, patch_bgr)
         other_saved += 1
 
-    print("Saved OTHER patches:", other_saved)
-    if other_saved == 0:
-        print(
-            "WARNING: OTHER=0 thường do bbox quá lớn hoặc ảnh quá nhỏ. "
-            "Thử tăng MAX_TRIALS_PER_OTHER hoặc nới IOU_MAX lên 0.1."
-        )
+    print("Saved TEST OTHER patches:", other_saved)
 
 
 if __name__ == "__main__":
