@@ -13,7 +13,7 @@ except Exception as e:
     TLDetectorTF1 = None
 
 # ====== EDIT THESE ======
-MODEL_PATH = "outputs/svm_best_hog.joblib"
+MODEL_PATH = "outputs/svm_hog.joblib"
 HOG_CONFIG_PATH = "outputs/hog_config.json"
 
 PATCH_SIZE = 64
@@ -24,8 +24,8 @@ DEFAULT_DETECT_SCORE_THRESHOLD = 0.10
 
 def load_hog_cfg():
     default = {
-        "orientations": 6,
-        "pixels_per_cell": [8, 8],
+        "orientations": 9,
+        "pixels_per_cell": [10, 10],
         "cells_per_block": [2, 2],
         "block_norm": "L2-Hys",
     }
