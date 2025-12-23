@@ -1,5 +1,4 @@
-# gradio_app.py
-import os
+import json
 import joblib
 import numpy as np
 import cv2
@@ -14,22 +13,30 @@ except Exception as e:
     TLDetectorTF1 = None
 
 # ====== EDIT THESE ======
-OUTPUTS_DIR = "outputs"
-MODEL_PATH = os.path.join(OUTPUTS_DIR, "svm_best_hog.joblib")  # default
+MODEL_PATH = "outputs/svm_best_hog.joblib"
+HOG_CONFIG_PATH = "outputs/hog_config.json"
+
 PATCH_SIZE = 64
 DEFAULT_REJECT_THRESHOLD = 0.55
 DEFAULT_DETECT_SCORE_THRESHOLD = 0.10
 # =======================
 
-# ====== HOG CONFIG (as requested) ======
-hog_cfg = {
-    "orientations": 6,
-    "pixels_per_cell": (8, 8),
-    "cells_per_block": (2, 2),
-    "block_norm": "L2-Hys",
-}
-# ======================================
 
+def load_hog_cfg():
+    default = {
+        "orientations": 6,
+        "pixels_per_cell": [8, 8],
+        "cells_per_block": [2, 2],
+        "block_norm": "L2-Hys",
+    }
+    try:
+        with open(HOG_CONFIG_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return default
+
+
+hog_cfg = load_hog_cfg()
 clf = joblib.load(MODEL_PATH)
 
 ID2NAME = {0: "other", 1: "green", 2: "red", 3: "yellow"}
@@ -38,6 +45,7 @@ ID2NAME = {0: "other", 1: "green", 2: "red", 3: "yellow"}
 def get_class_names_from_model(model):
     """Return display names in the same order as model.classes_."""
     if not hasattr(model, "classes_"):
+        # fallback
         return ["other", "green", "red", "yellow"], [0, 1, 2, 3]
 
     classes = list(model.classes_)
@@ -54,15 +62,35 @@ def get_class_names_from_model(model):
 CLASS_NAMES, MODEL_CLASSES = get_class_names_from_model(clf)
 
 
+def _letterbox_resize(img_bgr, dst_size):
+    """Resize giữ tỉ lệ, padding letterbox để ra dst_size×dst_size."""
+    h, w = img_bgr.shape[:2]
+    scale = dst_size / max(h, w)
+    new_w, new_h = int(round(w * scale)), int(round(h * scale))
+    resized = cv2.resize(img_bgr, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+    pad_top = (dst_size - new_h) // 2
+    pad_bottom = dst_size - new_h - pad_top
+    pad_left = (dst_size - new_w) // 2
+    pad_right = dst_size - new_w - pad_left
+
+    return cv2.copyMakeBorder(
+        resized,
+        pad_top,
+        pad_bottom,
+        pad_left,
+        pad_right,
+        borderType=cv2.BORDER_CONSTANT,
+        value=[0, 0, 0],
+    )
+
+
 def preprocess_patch(img_bgr, apply_clahe=False):
-    """
-    - Nếu đã đúng 64x64: giữ nguyên
-    - Nếu không: resize WARP về 64x64 (KHÔNG padding)
-    """
+    # Nếu đã đúng 64x64 -> giữ nguyên đúng nghĩa "truyền thẳng".
     if img_bgr.shape[0] == PATCH_SIZE and img_bgr.shape[1] == PATCH_SIZE:
         img = img_bgr.copy()
     else:
-        img = cv2.resize(img_bgr, (PATCH_SIZE, PATCH_SIZE), interpolation=cv2.INTER_AREA)
+        img = _letterbox_resize(img_bgr, PATCH_SIZE)
 
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
@@ -117,6 +145,7 @@ def pick_non_other(probs: dict):
     """Chọn label tốt nhất trong {green, red, yellow} (loại other)."""
     probs2 = {k: float(v) for k, v in probs.items() if k != "other"}
     if len(probs2) == 0:
+        # fallback cực đoan
         return {"other": 1.0, "green": 0.0, "red": 0.0, "yellow": 0.0}, "other", 1.0
     best = max(probs2, key=probs2.get)
     return probs2, best, float(probs2[best])
@@ -157,7 +186,6 @@ def predict(image_rgb, reject_threshold=DEFAULT_REJECT_THRESHOLD, det_score=DEFA
     is_patch_64 = (h == PATCH_SIZE and w == PATCH_SIZE)
 
     meta_lines = []
-    meta_lines.append(f"[HOG] orient={hog_cfg['orientations']}, cell={hog_cfg['pixels_per_cell']}, block={hog_cfg['cells_per_block']}, norm={hog_cfg['block_norm']}")
 
     # -----------------------------
     # Case 1: input is exactly 64x64 patch => feed directly
@@ -191,7 +219,7 @@ def predict(image_rgb, reject_threshold=DEFAULT_REJECT_THRESHOLD, det_score=DEFA
         meta_lines.append("[DETECTOR] unavailable => FORCE OTHER")
         meta_lines.append("[RULE] not 64x64 AND no TL box => OTHER")
 
-        patch_show_bgr, _ = preprocess_patch(bgr, apply_clahe=False)  # resize warp
+        patch_show_bgr, _ = preprocess_patch(bgr, apply_clahe=False)
         patch_show_rgb = cv2.cvtColor(patch_show_bgr, cv2.COLOR_BGR2RGB)
 
         title = (
@@ -211,7 +239,7 @@ def predict(image_rgb, reject_threshold=DEFAULT_REJECT_THRESHOLD, det_score=DEFA
         meta_lines.append(f"[DETECTOR] no box (reason={meta.reason}) => FORCE OTHER")
         meta_lines.append("[RULE] not 64x64 AND no TL box => OTHER")
 
-        patch_show_bgr, _ = preprocess_patch(bgr, apply_clahe=False)  # resize warp
+        patch_show_bgr, _ = preprocess_patch(bgr, apply_clahe=False)
         patch_show_rgb = cv2.cvtColor(patch_show_bgr, cv2.COLOR_BGR2RGB)
 
         title = (
@@ -231,7 +259,7 @@ def predict(image_rgb, reject_threshold=DEFAULT_REJECT_THRESHOLD, det_score=DEFA
     # disable other: pick among green/red/yellow
     probs_no_other, final_label, final_conf = pick_non_other(probs)
 
-    patch_show_bgr, _ = preprocess_patch(crop_bgr, apply_clahe=apply_clahe)  # resize warp
+    patch_show_bgr, _ = preprocess_patch(crop_bgr, apply_clahe=apply_clahe)
     patch_show_rgb = cv2.cvtColor(patch_show_bgr, cv2.COLOR_BGR2RGB)
 
     title = (
@@ -246,26 +274,29 @@ def predict(image_rgb, reject_threshold=DEFAULT_REJECT_THRESHOLD, det_score=DEFA
 with gr.Blocks() as demo:
     gr.Markdown(
         "# Traffic Light Demo (TF1 detector -> crop ROI -> HOG+SVM)\n"
-        "- Nếu input **64×64**: đưa thẳng vào model (reject threshold có thể ra **OTHER**)\n"
-        "- Nếu input **khác 64×64**:\n"
-        "  - **Không detect ra đèn** => ép **OTHER** + probabilities: other=100%, còn lại=0%\n"
-        "  - **Detect ra đèn** => **disable OTHER** (chỉ chọn green/red/yellow)\n"
-        "- **Chuẩn hoá patch**: resize thẳng về 64×64 (**KHÔNG padding**)\n"
     )
 
     with gr.Row():
         inp = gr.Image(type="numpy", label="Upload image (patch 64×64 hoặc ảnh gốc)")
         with gr.Column():
-            thr = gr.Slider(0.0, 1.0, step=0.01, value=DEFAULT_REJECT_THRESHOLD, label="Reject threshold (chỉ áp dụng cho patch 64×64)")
-            det_thr = gr.Slider(0.0, 0.9, step=0.01, value=DEFAULT_DETECT_SCORE_THRESHOLD, label="Detector score threshold")
+            thr = gr.Slider(
+                0.0, 1.0, step=0.01,
+                value=DEFAULT_REJECT_THRESHOLD,
+                label="Reject threshold (chỉ áp dụng cho patch 64×64)"
+            )
+            det_thr = gr.Slider(
+                0.0, 0.9, step=0.01,
+                value=DEFAULT_DETECT_SCORE_THRESHOLD,
+                label="Detector score threshold"
+            )
             clahe = gr.Checkbox(value=False, label="Apply CLAHE")
             btn = gr.Button("Submit")
 
     with gr.Row():
         out_full = gr.Image(type="numpy", label="Full image (bbox nếu detect được)")
-        out_patch = gr.Image(type="numpy", label="Patch dùng để phân loại (resize 64×64, KHÔNG padding)")
+        out_patch = gr.Image(type="numpy", label="Patch dùng để phân loại (đã chuẩn hoá về 64×64)")
 
-    out_txt = gr.Textbox(label="Result", lines=8)
+    out_txt = gr.Textbox(label="Result", lines=7)
     out_prob = gr.Label(label="Probabilities")
 
     btn.click(
@@ -273,6 +304,7 @@ with gr.Blocks() as demo:
         inputs=[inp, thr, det_thr, clahe],
         outputs=[out_full, out_patch, out_txt, out_prob],
     )
+
 
 if __name__ == "__main__":
     demo.launch()
