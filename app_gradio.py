@@ -274,10 +274,6 @@ def predict(image_rgb, reject_threshold=DEFAULT_REJECT_THRESHOLD, det_score=DEFA
 with gr.Blocks() as demo:
     gr.Markdown(
         "# Traffic Light Demo (TF1 detector -> crop ROI -> HOG+SVM)\n"
-        "- Nếu input **64×64**: đưa thẳng vào model (reject threshold có thể ra **OTHER**)\n"
-        "- Nếu input **khác 64×64**:\n"
-        "  - **Không detect ra đèn** => ép **OTHER** + probabilities: other=100%, còn lại=0%\n"
-        "  - **Detect ra đèn** => **disable OTHER** (chỉ chọn green/red/yellow)\n"
     )
 
     with gr.Row():
