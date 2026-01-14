@@ -42,6 +42,11 @@ pip install numpy pandas opencv-python matplotlib scikit-learn tensorflow scikit
 
 Activate your environment in future shells with `source .venv/bin/activate` (or the Windows equivalent).
 
+### Quick commands
+- **Launch the demo UI:** `python app_gradio.py` (or `python app_gradio_B.py` for the compact layout).
+- **Open the main notebook:** `jupyter notebook lisa_full_pipeline_clean.ipynb`.
+- **Export demo patches:** `python scripts/make_demo_patches.py` (after setting `DATASET_ROOT` and `OUT_DIR`).
+
 ### Quickstart workflow
 1. **Use the included artifacts:** pre-trained HOG + SVM models and configs live in `outputs/` (e.g., `svm_hog.joblib`, `svm_best_hog.joblib`, `ablation_light_best_model.joblib`, and matching JSON configs). You can immediately load these files in the Gradio app without retraining.
 2. **Train your own model (optional):** follow the steps in **Training & evaluation** to regenerate artifacts tailored to your dataset slice or hyperparameters.
@@ -53,6 +58,12 @@ Download the LISA Traffic Light Dataset from Kaggle:
 - https://www.kaggle.com/datasets/mbornoe/lisa-traffic-light-dataset
 
 After extracting, note the dataset root (folder containing `Annotations/` and video folders). The utilities assume the original folder structure.
+
+### Expected outputs
+When you run the training notebook or custom pipeline, the following artifacts are written to `outputs/`:
+- `svm_hog.joblib` / `svm_best_hog.joblib`: trained SVM models for HOG features.
+- `hog_config.json`: the HOG preprocessing configuration (patch size, cell size, etc.).
+- `ablation_light_best_model.joblib`: best-performing model from the ablation notebook.
 
 ### Build a patch dataset
 Use `dataset_lisa.py` to crop 64×64 patches from bounding boxes (and optional background patches):
